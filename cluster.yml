@@ -1,0 +1,11 @@
+---
+name: 'core'
+coreos:
+  channel: 'stable'
+roles:
+  - name: 'node'
+    instances: 2
+    vm:
+      cpus: 1
+      memory: 512
+      ipbase: '171.41.1.'
