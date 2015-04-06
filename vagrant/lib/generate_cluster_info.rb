@@ -8,6 +8,7 @@ def generate_cluster_info(cluster)
   cluster['roles'].each do |role|
     (1..role['instances']).each do |i|
       node = {
+        :role => role['name'],
         :hostname => "%s-%s%02d" % [cluster['name'] || 'coreos', role['name'] || 'node', i],
         :vm => {
           :cpus => role['vm']['cpus'] || 1,

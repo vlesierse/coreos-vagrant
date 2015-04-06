@@ -6,6 +6,11 @@ Vagrant.require_version ">= 1.6.0"
 VAGRANTFILE_API_VERSION = "2"
 VAGRANTFILE_PATH = File.dirname(__FILE__)
 
+# Destroy all cloud config files when destroy
+if ARGV[0].eql?('destroy')
+  Dir.glob(File.join(VAGRANTFILE_PATH, '.vagrant/cloud-config*.yml')).each { |f| File.delete(f) }
+end
+
 # Require YAML module
 require 'yaml'
 
@@ -15,11 +20,8 @@ require File.join(VAGRANTFILE_PATH, 'vagrant/lib/generate_cluster_info')
 cluster = generate_cluster_info(YAML.load_file(cluster_file))
 
 cloud_config_file = File.join(VAGRANTFILE_PATH, '.vagrant/cloud-config.yml')
-if File.exists?(cloud_config_file)
-  File.delete(cloud_config_file)
-end
 tmp_cloud_config_file = File.join(VAGRANTFILE_PATH, 'cloud-config.yml')
-if File.exists?(tmp_cloud_config_file) && ARGV[0].eql?('up')
+if !File.exists?(cloud_config_file) && File.exists?(tmp_cloud_config_file) && ARGV[0].eql?('up')
   require 'open-uri'
 
   token = open('https://discovery.etcd.io/new').read
@@ -64,19 +66,32 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
       config.vm.network :private_network, ip: node[:vm][:ipaddress]
 
-      node_config_file = node[:configfile] || cloud_config_file
+      node_config_file = node[:configfile] || File.join(VAGRANTFILE_PATH, '.vagrant/cloud-config-%s.yml' % node[:role])
+      if (!File.exists?(node_config_file) && ARGV[0].eql?('up')) || ARGV[0].eql?('provision')
+        data = YAML.load(IO.readlines(cloud_config_file)[1..-1].join)
+        data['coreos']['fleet']['metadata'] = 'role=%s' % node[:role]
+        node[:units].each do |unit|
+          unit_file = "%s.service" % unit
+          data['coreos']['units'].push({
+            'name' => unit_file,
+            'command' => 'start',
+            'content' => File.read(File.join(VAGRANTFILE_PATH, "units/%s" % unit_file))
+            })
+          unit_discovery_file = "%s-discovery.service" % unit
+          if File.exists?(File.join(VAGRANTFILE_PATH, "units/%s" % unit_discovery_file))
+            data['coreos']['units'].push({
+            'name' => unit_discovery_file,
+            'command' => 'start',
+            'content' => File.read(File.join(VAGRANTFILE_PATH, "units/%s" % unit_discovery_file))
+            })
+          end
+        end
+
+        yaml = YAML.dump(data)
+        File.open(node_config_file, 'w') { |file| file.write("#cloud-config\n\n#{yaml}") }
+      end
       config.vm.provision :file, :source => "#{node_config_file}", :destination => "/tmp/vagrantfile-user-data"
       config.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
-      
-      # Provision Units
-      node[:units].each do |unit|
-        unit_file = "%s.service" % unit
-        unit_path = File.join(VAGRANTFILE_PATH, "units/%s" % unit_file)
-        if File.exist?(unit_path)
-          config.vm.provision :file, :source => "#{unit_path}", :destination => "/tmp/units/#{unit_file}"
-          config.vm.provision :shell, :inline => "mv /tmp/units/#{unit_file} /etc/systemd/system/#{unit_file} && systemctl enable #{unit_file} && systemctl start #{unit_file}", :privileged => true
-        end
-      end
     end
   end
 end
