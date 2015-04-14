@@ -1,0 +1,24 @@
+---
+name: 'core'
+coreos:
+  channel: 'stable'
+roles:
+  - name: 'master'
+    instances: 1
+    vm:
+      cpus: 1
+      memory: 1024
+      ipbase: '171.41.1.'
+    units:
+      - zookeeper
+      - mesos-master
+      - marathon
+      - vamp
+  - name: 'slave'
+    instances: 2
+    vm:
+      cpus: 1
+      memory: 1024
+      ipbase: '171.41.2.'
+    units:
+      - mesos-slave

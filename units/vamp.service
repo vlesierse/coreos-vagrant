@@ -1,0 +1,28 @@
+[Unit]
+Description=Vamp
+After=docker.service
+After=marathon.service
+Requires=docker.service
+Requires=marathon.service
+
+[Service]
+Restart=on-failure
+RestartSec=20
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill vamp
+ExecStartPre=-/usr/bin/docker rm vamp
+ExecStartPre=/usr/bin/docker pull magneticio/vamp:0.7.0-RC3
+ExecStart=/usr/bin/sh -c "/usr/bin/docker run \
+	-p 8081:8080 \
+	-p 8083:8083 \
+	-p 9300:9300 \
+	-p 10001:10001 \
+	-p 33001:33001 \
+	-p 33002:33002 \
+	-p 33003:33003 \
+	-e VAMP_MARATHON_URL=http://172.17.42.1:8080 \
+	magneticio/vamp:0.7.0-RC3"
+ExecStop=/usr/bin/docker stop vamp
+
+[Install]
+WantedBy=multi-user.target
